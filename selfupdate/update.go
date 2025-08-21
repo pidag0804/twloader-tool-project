@@ -14,8 +14,9 @@ import (
 	"twloader-tool/utils"
 )
 
-const (
-	appVersion        = "1.0.0"
+var (
+	// 將 appVersion 改為變數，並設定一個開發時的預設值
+	appVersion        = "1.0.0-dev"
 	appUpdateCheckURL = "http://tlmoo.com/twloader/down/version.json"
 )
 

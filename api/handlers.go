@@ -426,6 +426,9 @@ func HandleCheckAppUpdate(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSON(w, http.StatusOK, result)
 }
 
+// ==================================================================
+// 【MODIFIED】: THIS IS THE CORRECTED FUNCTION
+// ==================================================================
 func HandleApplyAppUpdate(w http.ResponseWriter, r *http.Request) {
 	var req selfupdate.AppVersionInfo
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -438,11 +441,24 @@ func HandleApplyAppUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "更新程序已啟動，應用程式即將關閉。"})
+	// 1. 正常地寫入成功回應到緩衝區
+	// 注意：我們在這裡手動設定 header 和 encode，而不是用 utils.WriteJSON
+	// 因為我們需要在寫入後手動 Flush
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":      true,
+		"message": "更新程序已啟動，應用程式即將關閉。",
+	})
 
-	// 在成功啟動更新程序後，觸發關閉
+	// 2. 【核心】強制將緩衝區的內容發送給客戶端
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	// 3. 在一個新的 goroutine 中延遲觸發關閉，確保 HTTP 回應有足夠時間送達
 	go func() {
-		time.Sleep(1 * time.Second)
-		TriggerShutdown() // 改為大寫
+		time.Sleep(500 * time.Millisecond)
+		TriggerShutdown()
 	}()
 }
