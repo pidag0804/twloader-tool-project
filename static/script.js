@@ -75,9 +75,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- UI 輔助函式 ---
     const showView = (viewId) => {
+        // 隱藏所有主視圖
         homeView.style.display = 'none';
         optimizeView.style.display = 'none';
-        document.getElementById(viewId).style.display = 'block';
+
+        // 【修正】確保在切換主視圖 (Home/Optimize) 時，會關閉所有覆蓋型視窗 (如聊天室、解析度設定)
+        // 這樣可以避免多個視圖同時顯示，導致的版面混亂或 "崩潰"
+        if (chatView) chatView.style.display = 'none';
+        if (resolutionView) resolutionView.style.display = 'none';
+
+        // 顯示目標主視圖
+        const targetView = document.getElementById(viewId);
+        if (targetView) {
+            targetView.style.display = 'block';
+        }
     };
 
     const updateTargetPathDisplay = () => {
@@ -642,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const messageContent = `${state.chatProfile.nickname}: 歡迎 ${mainChannel}${subChannel} room '${room}'! 找我一起玩 ${mode} 模式!!!`;
+        const messageContent = `歡迎來 ${mainChannel}${subChannel} 房號 【${room}】! 大家一起玩 ${mode} 模式!!!`;
         
         if (state.chatSocket && state.chatSocket.readyState === WebSocket.OPEN) {
             const payload = {
@@ -660,6 +671,36 @@ document.addEventListener('DOMContentLoaded', () => {
     homeGrid.addEventListener('click', async (e) => {
         const launchBtn = e.target.closest('.launch-button');
         if (launchBtn) {
+            // --- 【錯誤修正】 ---
+            // 錯誤原因：原本的程式碼試圖在 launchBtn (按鈕) 內部尋找 .card-title (標題)，但它們是兄弟元素。
+            // 修正方法：先找到共同的父層 .home-card，然後再從父層往下尋找 h2 標題元素。
+            const parentCard = launchBtn.closest('.home-card');
+            if (!parentCard) return; // 安全檢查：如果找不到父層卡片，則不執行後續操作
+
+            const originalTextElement = parentCard.querySelector('h2'); // 在父層卡片中尋找 h2 標題
+            if (!originalTextElement) return; // 安全檢查：如果找不到標題元素，也中止
+            // --- 修正結束 ---
+
+            // --- 【整合】防呆機制開始 ---
+            if (launchBtn.disabled) return; // 如果按鈕已禁用，則不執行任何操作
+
+            launchBtn.disabled = true;
+            const originalText = originalTextElement.textContent;
+            let countdown = 30;
+            originalTextElement.textContent = `如需雙開請稍候 (${countdown}s)`;
+
+            const intervalId = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    originalTextElement.textContent = `如需雙開請稍候 (${countdown}s)`;
+                } else {
+                    clearInterval(intervalId);
+                    launchBtn.disabled = false;
+                    originalTextElement.textContent = originalText;
+                }
+            }, 1000);
+            // --- 防呆機制結束 ---
+
             const mode = launchBtn.dataset.mode;
             showToast(`正在發出 ${mode.toUpperCase()} 模式啟動命令...`, 'info');
             try {
@@ -671,6 +712,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('已發出啟動命令。', 'success');
             } catch(err) {
                 showToast(`啟動失敗: ${err.message}`, 'error');
+                // 如果啟動失敗，立即重置按鈕狀態
+                clearInterval(intervalId);
+                launchBtn.disabled = false;
+                originalTextElement.textContent = originalText;
             }
         }
 
